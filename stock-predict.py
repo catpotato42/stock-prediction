@@ -13,10 +13,11 @@ import time
 def get_error(name, y_true, y_pred):
     mae = mean_absolute_error(y_true, y_pred)
     mse = mean_squared_error(y_true, y_pred)
+    root_mse = np.sqrt(mse)
 
     print(name)
     print(f"mean absolute error = {mae}")
-    print(f"mean squared error = {mse}")
+    print(f"root mean squared error = {root_mse}")
 
 def main():
     current_date = time.strftime("%Y-%m-%d", time.localtime())
