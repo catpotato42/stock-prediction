@@ -36,7 +36,7 @@ def main():
     #remove nan vals that could have been created by my edits, yf removes on download
     stock_data = stock_data.dropna()
 
-    #using all features that the yahoo finance thing has plus the moving avgs and lag features
+    #using all features that the yahoo finance thing has plus lag features
     features = ['Open', 'High', 'Low', 'Close', 'Volume']
     lag_cols = [f'Close_Lag_{i}' for i in range(1, days_to_check + 1)]
     features.extend(lag_cols)
