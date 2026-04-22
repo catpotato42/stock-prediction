@@ -23,7 +23,7 @@ def main():
     current_date = time.strftime("%Y-%m-%d", time.localtime())
     ticker = "^GSPC"
     #get stock data (no csv), np array
-    stock_data = yf.download(ticker, start="1980-01-01", end=current_date, progress=False)
+    stock_data = yf.download(ticker, start="1980-01-01", end="2026-2-25", progress=False)
 
     #preprocess
     days_to_check = 30 
@@ -61,6 +61,10 @@ def main():
     #eval
     get_error("Multiple Linear Regression", y_test, lr_predictions)
     get_error("Neural Network", y_test, nn_predictions)
+
+    print(f"day before price: {y_test.iloc[-2]}")
+    print(f"actual price: {y_test.iloc[-1]}")
+    print(f"predicted price: {lr_predictions[-1]}")
 
 if __name__ == "__main__":
     main()
