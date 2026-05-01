@@ -26,34 +26,37 @@ def get_error(name, y_true, y_pred):
 
 def main():
     current_date = time.strftime("%Y-%m-%d", time.localtime())
+    print(current_date)
     ticker = "^GSPC"
     #get stock data (no csv), np array
     stock_data = yf.download(ticker, start="1980-01-01", end=current_date, progress=False)
 
     #preprocess
-    days_to_check = 30
-    predict_days = 30
+    days_to_check = 60
+    predict_days = 1
     
     future_close = stock_data['Close'].shift(-predict_days)
+
+    stock_data['Target_Date'] = stock_data.index.to_series().shift(-predict_days)
     stock_data['Target_Return'] = (future_close - stock_data['Close']) / stock_data['Close']
 
     #lagging features
     for i in range(1, days_to_check + 1):
         stock_data[f'Close_Lag_{i}'] = stock_data['Close'].shift(i)
 
-    #remove nan vals that could have been created by my edits, yf removes on download
-    stock_data = stock_data.dropna()
-
-    #using all features that the yahoo finance thing has plus lag features
     features = ['Open', 'High', 'Low', 'Close', 'Volume']
     lag_cols = [f'Close_Lag_{i}' for i in range(1, days_to_check + 1)]
     features.extend(lag_cols)
+    live_prediction_data = stock_data.tail(predict_days).copy()
+
+    stock_data = stock_data.dropna()
     X = stock_data[features]
     y = stock_data['Target_Return']
     base_prices = stock_data['Close']
+    target_dates = stock_data['Target_Date']
 
-    X_train, X_test, y_train, y_test, base_train, base_test = train_test_split(
-        X, y, base_prices, test_size=0.2, shuffle=False
+    X_train, X_test, y_train, y_test, base_train, base_test, dates_train, dates_test = train_test_split(
+        X, y, base_prices, target_dates, test_size=0.2, shuffle=False
     )
 
     X_scaler = StandardScaler()
@@ -71,7 +74,7 @@ def main():
         Dense(32),
         Dense(1)
     ])
-    lstm_model.compile(optimizer='adam', loss='mse')
+    lstm_model.compile(optimizer='adam', loss='mae')
 
     early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
@@ -84,21 +87,25 @@ def main():
         verbose=0
     )
 
-    #flatten the predictions so they match the 1D shape of y_test for sklearn
+    #flatten the predictions so they match the 1D shape of y_test
     lstm_predictions = lstm_model.predict(X_test_lstm, verbose=0).flatten()
 
-    #model training
+    #lr model training
     lr_model = LinearRegression()
     lr_model.fit(X_train_scaled, y_train_scaled)
     lr_predictions = lr_model.predict(X_test_scaled)
+
+    #nn model training
     nn_model = MLPRegressor(hidden_layer_sizes=(128, 64), max_iter=500, random_state=42, early_stopping=True)
     nn_model.fit(X_train_scaled, y_train_scaled)
     nn_predictions = nn_model.predict(X_test_scaled)
 
+    volatility_multiplier = 1
+
     #inverse transform to get the actual predicted returns
-    lr_pred_returns = y_scaler.inverse_transform(lr_predictions.reshape(-1, 1)).flatten()
-    nn_pred_returns = y_scaler.inverse_transform(nn_predictions.reshape(-1, 1)).flatten()
-    lstm_pred_returns = y_scaler.inverse_transform(lstm_predictions.reshape(-1, 1)).flatten()
+    lr_pred_returns = y_scaler.inverse_transform(lr_predictions.reshape(-1, 1)).flatten() * volatility_multiplier
+    nn_pred_returns = y_scaler.inverse_transform(nn_predictions.reshape(-1, 1)).flatten() * volatility_multiplier
+    lstm_pred_returns = y_scaler.inverse_transform(lstm_predictions.reshape(-1, 1)).flatten() * volatility_multiplier
     actual_returns = y_test.values.flatten()
 
     base_vals = base_test.values.flatten()
@@ -121,10 +128,10 @@ def main():
 
     #plot results
     plt.figure(figsize=(14, 7))
-    plt.plot(y_test.index, actual_prices, label='True Price', color='black', linewidth=2)
-    plt.plot(y_test.index, lr_pred_prices, label='MLR', alpha=0.8, linestyle='--')
-    plt.plot(y_test.index, nn_pred_prices, label='nn', alpha=0.8, linestyle='-.')
-    plt.plot(y_test.index, lstm_pred_prices, label='LSTM', alpha=0.8, linestyle=':')
+    plt.plot(dates_test, actual_prices, label='True Price', color='black', linewidth=2)
+    plt.plot(dates_test, lr_pred_prices, label='MLR', alpha=0.8, linestyle='--')
+    plt.plot(dates_test, nn_pred_prices, label='Neural Network', alpha=0.8, linestyle='-.')
+    plt.plot(dates_test, lstm_pred_prices, label='LSTM', alpha=0.8, linestyle=':')
     
     plt.title("Model Predictions vs Actual Prices (30-Day Extrapolation)", fontsize=16)
     plt.xlabel("Date", fontsize=12)
@@ -135,18 +142,23 @@ def main():
     plt.show()
 
     #lstm predict
-    today_features = X.iloc[-1].values.reshape(1, -1)
+    today_features = live_prediction_data[features].iloc[-1].values.reshape(1, -1)
     
     today_scaled = X_scaler.transform(today_features)
     today_lstm = today_scaled.reshape((1, 1, today_scaled.shape[1]))
     
     predicted_return_scaled = lstm_model.predict(today_lstm, verbose=0)
-    predicted_return = y_scaler.inverse_transform(predicted_return_scaled).flatten()[0]
+    predicted_return = y_scaler.inverse_transform(predicted_return_scaled).flatten()[0] * volatility_multiplier
     
-    today_price = base_prices.iloc[-1]
+    try:
+        today_price = float(live_prediction_data['Close'].iloc[-1].iloc[0])
+    except:
+        today_price = float(live_prediction_data['Close'].iloc[-1])
     tomorrow_predicted_price = today_price * (1 + predicted_return)
-    print(f"Today's Actual Close: {today_price}")
-    print(f"LSTM Predicted Close for Tomorrow: {tomorrow_predicted_price}")
+
+    print(f"\nTarget Prediction Date: {current_date}")
+    print(f"Based on Data From: {live_prediction_data.index[-1].strftime('%Y-%m-%d')}")
+    print(f"Predicted Close: {tomorrow_predicted_price:.2f}")
 
 if __name__ == "__main__":
     main()
