@@ -32,8 +32,8 @@ def main():
     stock_data = yf.download(ticker, start="1980-01-01", end=current_date, progress=False)
 
     #preprocess
-    days_to_check = 60
-    predict_days = 1
+    days_to_check = 30
+    predict_days = 30
     
     future_close = stock_data['Close'].shift(-predict_days)
 
@@ -133,7 +133,7 @@ def main():
     plt.plot(dates_test, nn_pred_prices, label='Neural Network', alpha=0.8, linestyle='-.')
     plt.plot(dates_test, lstm_pred_prices, label='LSTM', alpha=0.8, linestyle=':')
     
-    plt.title("Model Predictions vs Actual Prices (30-Day Extrapolation)", fontsize=16)
+    plt.title("Model Predictions vs Actual Prices", fontsize=16)
     plt.xlabel("Date", fontsize=12)
     plt.ylabel(ticker+"Price (USD)", fontsize=12)
     plt.legend(loc='upper left')
