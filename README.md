@@ -3,4 +3,5 @@ demonstrating the unreliability of the stock market through a couple different r
 
 installs:
 python -m venv venvywenvy
-pip install pandas numpy scikit-learn yfinance
+
+pip install pandas numpy scikit-learn yfinance tensorflow matplotlib torch
